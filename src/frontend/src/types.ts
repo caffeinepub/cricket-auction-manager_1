@@ -41,15 +41,31 @@ export interface AuctionState {
   playerQueue: string[];
 }
 
+export type TierPricing = {
+  basePrice: number;
+  increment: number;
+};
+
+export const DEFAULT_TIER_RULES: Record<Tier, TierPricing> = {
+  Diamond: { basePrice: 5000, increment: 500 },
+  Gold: { basePrice: 3000, increment: 500 },
+  Silver: { basePrice: 1500, increment: 500 },
+};
+
+// Keep for backward compat
+export const TIER_RULES = DEFAULT_TIER_RULES;
+
 export interface AppState {
   tournament: Tournament;
   teams: Team[];
   players: Player[];
   auction: AuctionState;
+  tierPricing: Record<Tier, TierPricing>;
 }
 
 export type Action =
   | { type: "SET_TOURNAMENT"; tournament: Tournament }
+  | { type: "SET_TIER_PRICING"; tierPricing: Record<Tier, TierPricing> }
   | { type: "ADD_TEAM"; team: Team }
   | { type: "UPDATE_TEAM"; team: Team }
   | { type: "DELETE_TEAM"; teamId: string }
@@ -64,12 +80,6 @@ export type Action =
   | { type: "START_SECONDARY_ROUND" }
   | { type: "RESET_AUCTION" }
   | { type: "NEW_TOURNAMENT" };
-
-export const TIER_RULES = {
-  Diamond: { basePrice: 2000, increment: 1000 },
-  Gold: { basePrice: 1500, increment: 500 },
-  Silver: { basePrice: 1000, increment: 500 },
-} as const;
 
 export const SPECIALTIES: Specialty[] = [
   "Batsman",
@@ -87,8 +97,12 @@ export function getRemainingBudget(team: Team): number {
   return team.budget - team.spent;
 }
 
-export function getNextBid(currentBid: number, tier: Tier): number {
-  const rules = TIER_RULES[tier];
+export function getNextBid(
+  currentBid: number,
+  tier: Tier,
+  pricing?: Record<Tier, TierPricing>,
+): number {
+  const rules = pricing ? pricing[tier] : DEFAULT_TIER_RULES[tier];
   return currentBid === 0 ? rules.basePrice : currentBid + rules.increment;
 }
 

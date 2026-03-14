@@ -125,61 +125,72 @@ export function ResultsTab() {
                   <div
                     key={team.id}
                     data-ocid={`results.item.${idx + 1}`}
-                    className="bg-card border border-border rounded-xl p-4 space-y-3"
+                    className="bg-card border border-border rounded-xl p-4 space-y-3 relative overflow-hidden"
                   >
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-10 w-10 rounded-md border border-border">
-                        <AvatarImage src={team.logoUrl} />
-                        <AvatarFallback className="bg-secondary text-sm rounded-md">
-                          {team.name.slice(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-bold text-foreground truncate">
-                          {team.name}
-                        </p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <Progress value={pct} className="h-1.5 flex-1" />
-                          <span className="text-xs text-muted-foreground whitespace-nowrap">
-                            {formatCurrency(remaining)}
-                          </span>
-                        </div>
-                      </div>
-                      <Badge
-                        variant="outline"
-                        className="text-muted-foreground border-border text-xs whitespace-nowrap"
-                      >
-                        {teamPlayers.length} players
-                      </Badge>
-                    </div>
-                    {teamPlayers.length > 0 ? (
-                      <div className="space-y-1">
-                        {teamPlayers.map((p) => (
-                          <div
-                            key={p.id}
-                            className="flex items-center gap-2 bg-secondary/60 rounded-md px-2 py-1.5"
-                          >
-                            <Avatar className="h-6 w-6 rounded-md">
-                              <AvatarImage src={p.photoUrl} />
-                              <AvatarFallback className="text-[9px] bg-muted rounded-md">
-                                {p.name.slice(0, 2).toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <span className="text-xs font-medium flex-1 truncate">
-                              {p.name}
-                            </span>
-                            <TierBadge tier={p.tier} />
-                            <span className="text-xs text-accent font-bold">
-                              {formatCurrency(p.soldPrice ?? 0)}
+                    {/* Team logo as faded background */}
+                    {team.logoUrl && (
+                      <img
+                        src={team.logoUrl}
+                        alt=""
+                        aria-hidden="true"
+                        className="absolute inset-0 w-full h-full object-cover opacity-10 pointer-events-none select-none"
+                      />
+                    )}
+                    <div className="relative z-10 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <Avatar className="h-10 w-10 rounded-md border border-border">
+                          <AvatarImage src={team.logoUrl} />
+                          <AvatarFallback className="bg-secondary text-sm rounded-md">
+                            {team.name.slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-foreground truncate">
+                            {team.name}
+                          </p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <Progress value={pct} className="h-1.5 flex-1" />
+                            <span className="text-xs text-muted-foreground whitespace-nowrap">
+                              {formatCurrency(remaining)}
                             </span>
                           </div>
-                        ))}
+                        </div>
+                        <Badge
+                          variant="outline"
+                          className="text-muted-foreground border-border text-xs whitespace-nowrap"
+                        >
+                          {teamPlayers.length} players
+                        </Badge>
                       </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground text-center py-2">
-                        No players bought
-                      </p>
-                    )}
+                      {teamPlayers.length > 0 ? (
+                        <div className="space-y-1">
+                          {teamPlayers.map((p) => (
+                            <div
+                              key={p.id}
+                              className="flex items-center gap-2 bg-secondary/60 rounded-md px-2 py-1.5"
+                            >
+                              <Avatar className="h-6 w-6 rounded-md">
+                                <AvatarImage src={p.photoUrl} />
+                                <AvatarFallback className="text-[9px] bg-muted rounded-md">
+                                  {p.name.slice(0, 2).toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="text-xs font-medium flex-1 truncate">
+                                {p.name}
+                              </span>
+                              <TierBadge tier={p.tier} />
+                              <span className="text-xs text-accent font-bold">
+                                {formatCurrency(p.soldPrice ?? 0)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground text-center py-2">
+                          No players bought
+                        </p>
+                      )}
+                    </div>
                   </div>
                 );
               })}

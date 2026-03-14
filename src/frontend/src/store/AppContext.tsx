@@ -6,7 +6,7 @@ import {
   useReducer,
 } from "react";
 import type { Action, AppState, Tier } from "../types";
-import { TIER_RULES } from "../types";
+import { DEFAULT_TIER_RULES } from "../types";
 
 const STORAGE_KEY = "cricket_auction_data";
 
@@ -25,6 +25,7 @@ const INITIAL_STATE: AppState = {
   teams: [],
   players: [],
   auction: INITIAL_AUCTION,
+  tierPricing: DEFAULT_TIER_RULES,
 };
 
 function advanceToNextPlayer(state: AppState): AppState {
@@ -61,6 +62,9 @@ function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case "SET_TOURNAMENT":
       return { ...state, tournament: action.tournament };
+
+    case "SET_TIER_PRICING":
+      return { ...state, tierPricing: action.tierPricing };
 
     case "ADD_TEAM":
       return { ...state, teams: [...state.teams, action.team] };
@@ -118,11 +122,11 @@ function reducer(state: AppState, action: Action): AppState {
     }
 
     case "PLACE_BID": {
-      const { auction, players } = state;
+      const { auction, players, tierPricing } = state;
       if (!auction.activePlayerId) return state;
       const player = players.find((p) => p.id === auction.activePlayerId);
       if (!player) return state;
-      const rules = TIER_RULES[player.tier];
+      const rules = tierPricing[player.tier];
       const nextBid =
         auction.currentBid === 0
           ? rules.basePrice
@@ -264,7 +268,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, INITIAL_STATE, () => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
-      return stored ? (JSON.parse(stored) as AppState) : INITIAL_STATE;
+      if (stored) {
+        const parsed = JSON.parse(stored) as AppState;
+        // Migrate old data without tierPricing
+        if (!parsed.tierPricing) {
+          parsed.tierPricing = DEFAULT_TIER_RULES;
+        }
+        return parsed;
+      }
+      return INITIAL_STATE;
     } catch {
       return INITIAL_STATE;
     }

@@ -31,6 +31,7 @@ import {
   TIERS,
   type Team,
   type Tier,
+  type TierPricing,
   formatCurrency,
   getRemainingBudget,
   getStatusClasses,
@@ -64,9 +65,21 @@ function TournamentSection() {
   const { state, dispatch } = useApp();
   const [name, setName] = useState(state.tournament.name);
   const [logoUrl, setLogoUrl] = useState(state.tournament.logoUrl);
+  const [pricing, setPricing] = useState<Record<Tier, TierPricing>>(
+    state.tierPricing,
+  );
+
+  function updatePricing(tier: Tier, field: keyof TierPricing, raw: string) {
+    const val = Number.parseInt(raw, 10);
+    setPricing((prev) => ({
+      ...prev,
+      [tier]: { ...prev[tier], [field]: Number.isNaN(val) ? 0 : val },
+    }));
+  }
 
   function save() {
     dispatch({ type: "SET_TOURNAMENT", tournament: { name, logoUrl } });
+    dispatch({ type: "SET_TIER_PRICING", tierPricing: pricing });
   }
 
   return (
@@ -104,6 +117,63 @@ function TournamentSection() {
             fallback="T"
           />
         </div>
+
+        {/* Auction Pricing */}
+        <div className="space-y-3 pt-2">
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-bold text-foreground">
+              Auction Pricing
+            </h3>
+            <span className="text-xs text-muted-foreground">
+              — configurable per tournament
+            </span>
+          </div>
+          <div className="bg-secondary/50 border border-border rounded-lg p-3 space-y-3">
+            {/* Header row */}
+            <div className="grid grid-cols-[100px_1fr_1fr] gap-3 items-center">
+              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                Tier
+              </span>
+              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                Base Price (₹)
+              </span>
+              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                Bid Increment (₹)
+              </span>
+            </div>
+            {TIERS.map((tier) => (
+              <div
+                key={tier}
+                className="grid grid-cols-[100px_1fr_1fr] gap-3 items-center"
+              >
+                <TierBadge tier={tier} />
+                <Input
+                  data-ocid={`setup.${tier.toLowerCase()}_base_price_input`}
+                  type="number"
+                  min={0}
+                  step={100}
+                  value={pricing[tier].basePrice}
+                  onChange={(e) =>
+                    updatePricing(tier, "basePrice", e.target.value)
+                  }
+                  className="bg-card border-border text-foreground h-8 text-sm"
+                />
+                <Input
+                  data-ocid={`setup.${tier.toLowerCase()}_increment_input`}
+                  type="number"
+                  min={0}
+                  step={100}
+                  value={pricing[tier].increment}
+                  onChange={(e) =>
+                    updatePricing(tier, "increment", e.target.value)
+                  }
+                  className="bg-card border-border text-foreground h-8 text-sm"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
         <Button
           data-ocid="setup.save_tournament_button"
           onClick={save}

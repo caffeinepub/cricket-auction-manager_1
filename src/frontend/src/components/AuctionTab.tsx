@@ -3,7 +3,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import {
   CheckCircle2,
   ChevronDown,
@@ -19,13 +18,11 @@ import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 import { useApp } from "../store/AppContext";
 import {
-  TIER_RULES,
   type Tier,
   formatCurrency,
   getNextBid,
   getRemainingBudget,
   getTierClasses,
-  getTierGlow,
 } from "../types";
 
 function TierBadge({ tier }: { tier: Tier }) {
@@ -52,9 +49,31 @@ function RoundBadge({ round }: { round: 1 | 2 }) {
   );
 }
 
+function PhaseBadge({ tier }: { tier: Tier }) {
+  const phaseLabel =
+    tier === "Diamond"
+      ? "Phase 1: Diamond"
+      : tier === "Gold"
+        ? "Phase 2: Gold"
+        : "Phase 3: Silver";
+  const cls =
+    tier === "Diamond"
+      ? "bg-blue-950 text-blue-300 border border-blue-700"
+      : tier === "Gold"
+        ? "bg-amber-950 text-amber-300 border border-amber-700"
+        : "bg-slate-800 text-slate-300 border border-slate-600";
+  return (
+    <span
+      className={`text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider ${cls}`}
+    >
+      {phaseLabel}
+    </span>
+  );
+}
+
 export function AuctionTab({ onGoToResults }: { onGoToResults: () => void }) {
   const { state, dispatch } = useApp();
-  const { auction, teams, players } = state;
+  const { auction, teams, players, tierPricing } = state;
   const [historyOpen, setHistoryOpen] = useState(false);
 
   const activePlayer = auction.activePlayerId
@@ -96,6 +115,36 @@ export function AuctionTab({ onGoToResults }: { onGoToResults: () => void }) {
                 {availablePlayers.length} players ready — {teams.length} teams —
                 sorted Diamond → Gold → Silver
               </p>
+
+              {/* Pricing Summary */}
+              <div className="mb-5 bg-secondary/50 border border-border rounded-lg p-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                  Auction Pricing
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  {(["Diamond", "Gold", "Silver"] as Tier[]).map((tier) => (
+                    <div
+                      key={tier}
+                      className="flex flex-col gap-1 bg-card border border-border rounded-lg p-2.5"
+                    >
+                      <TierBadge tier={tier} />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Base:{" "}
+                        <span className="text-foreground font-semibold">
+                          {formatCurrency(tierPricing[tier].basePrice)}
+                        </span>
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Step:{" "}
+                        <span className="text-foreground font-semibold">
+                          +{formatCurrency(tierPricing[tier].increment)}
+                        </span>
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <Button
                 data-ocid="auction.start_button"
                 size="lg"
@@ -151,6 +200,14 @@ export function AuctionTab({ onGoToResults }: { onGoToResults: () => void }) {
   if (auction.started && !auction.activePlayerId) {
     const soldCount = players.filter((p) => p.status === "sold").length;
     const unsoldCount = unsoldPlayers.length;
+    const teamsUnder11 = teams.filter((t) => {
+      const bought = players.filter(
+        (p) => p.status === "sold" && p.soldToTeamId === t.id,
+      ).length;
+      return bought < 11;
+    });
+    const canViewResults = teamsUnder11.length === 0;
+
     return (
       <div className="max-w-2xl mx-auto">
         <div className="bg-card border border-border rounded-xl p-8 text-center space-y-5">
@@ -163,6 +220,40 @@ export function AuctionTab({ onGoToResults }: { onGoToResults: () => void }) {
           <p className="text-muted-foreground">
             {soldCount} players sold · {unsoldCount} players unsold
           </p>
+
+          {/* Min 11 warning */}
+          {!canViewResults && (
+            <div
+              data-ocid="auction.min_players_warning"
+              className="bg-amber-950/60 border border-amber-700 rounded-lg px-4 py-3 text-left"
+            >
+              <p className="text-amber-300 text-sm font-semibold">
+                ⚠ Minimum 11 players not met
+              </p>
+              <p className="text-amber-400/70 text-xs mt-1">
+                {teamsUnder11.length} team
+                {teamsUnder11.length !== 1 ? "s have" : " has"} fewer than 11
+                players. Each team requires a minimum of 11 players before the
+                auction can be ended.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-1">
+                {teamsUnder11.map((t) => {
+                  const count = players.filter(
+                    (p) => p.status === "sold" && p.soldToTeamId === t.id,
+                  ).length;
+                  return (
+                    <span
+                      key={t.id}
+                      className="text-[10px] bg-amber-900/50 text-amber-300 border border-amber-700/50 rounded-full px-2 py-0.5"
+                    >
+                      {t.name}: {count}/11
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {auction.round === 1 && unsoldCount > 0 && (
             <Button
               data-ocid="auction.start_secondary_round_button"
@@ -179,10 +270,17 @@ export function AuctionTab({ onGoToResults }: { onGoToResults: () => void }) {
             size="lg"
             variant="outline"
             onClick={onGoToResults}
-            className="border-border text-foreground hover:bg-secondary text-base px-8"
+            disabled={!canViewResults}
+            className="border-border text-foreground hover:bg-secondary text-base px-8 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <ChevronRight className="h-5 w-5 mr-2" /> View Results
           </Button>
+          {!canViewResults && (
+            <p className="text-xs text-muted-foreground">
+              Complete the secondary round or ensure all teams have 11+ players
+              to view results.
+            </p>
+          )}
         </div>
       </div>
     );
@@ -190,8 +288,12 @@ export function AuctionTab({ onGoToResults }: { onGoToResults: () => void }) {
 
   // Active bidding — full-screen hero layout
   if (!activePlayer) return null;
-  const tierRules = TIER_RULES[activePlayer.tier];
-  const nextBidAmount = getNextBid(auction.currentBid, activePlayer.tier);
+  const tierRules = tierPricing[activePlayer.tier];
+  const nextBidAmount = getNextBid(
+    auction.currentBid,
+    activePlayer.tier,
+    tierPricing,
+  );
   const currentBidderTeam = auction.currentBidderId
     ? teams.find((t) => t.id === auction.currentBidderId)
     : null;
@@ -228,10 +330,13 @@ export function AuctionTab({ onGoToResults }: { onGoToResults: () => void }) {
             </div>
           )}
 
-          {/* Top overlay: round badge + queue count */}
-          <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 pt-3 z-10">
-            <RoundBadge round={auction.round} />
-            <span className="text-xs font-semibold bg-black/50 text-white/80 px-2.5 py-1 rounded-full backdrop-blur-sm">
+          {/* Top overlay: round badge + phase badge + queue count */}
+          <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 pt-3 z-10 gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <RoundBadge round={auction.round} />
+              <PhaseBadge tier={activePlayer.tier} />
+            </div>
+            <span className="text-xs font-semibold bg-black/50 text-white/80 px-2.5 py-1 rounded-full backdrop-blur-sm shrink-0">
               {remainingInQueue} in queue
             </span>
           </div>
@@ -393,7 +498,9 @@ export function AuctionTab({ onGoToResults }: { onGoToResults: () => void }) {
                             {team?.name}
                           </span>
                           <span
-                            className={`text-[10px] font-bold whitespace-nowrap ${i === 0 ? "text-primary" : "text-white/40"}`}
+                            className={`text-[10px] font-bold whitespace-nowrap ${
+                              i === 0 ? "text-primary" : "text-white/40"
+                            }`}
                           >
                             {formatCurrency(entry.amount)}
                           </span>
