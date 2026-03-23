@@ -21,8 +21,26 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Edit2, Plus, Trash2, Trophy, UserRound, Users } from "lucide-react";
-import { useState } from "react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Download,
+  Edit2,
+  FileSpreadsheet,
+  FolderOpen,
+  HardDrive,
+  Plus,
+  Trash2,
+  Trophy,
+  UserRound,
+  Users,
+} from "lucide-react";
+import { useRef, useState } from "react";
+import { toast } from "sonner";
+import * as XLSX from "xlsx";
+import { loadBackup, saveBackup } from "../hooks/useBackup";
 import { useApp } from "../store/AppContext";
 import {
   type Player,
@@ -40,12 +58,12 @@ import {
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ImageUpload } from "./ImageUpload";
 
-function TierBadge({ tier }: { tier: Tier }) {
+function TierBadge({ tier, label }: { tier: Tier; label?: string }) {
   return (
     <span
       className={`text-xs font-semibold px-2 py-0.5 rounded-full ${getTierClasses(tier)}`}
     >
-      {tier}
+      {label ?? tier}
     </span>
   );
 }
@@ -68,6 +86,14 @@ function TournamentSection() {
   const [pricing, setPricing] = useState<Record<Tier, TierPricing>>(
     state.tierPricing,
   );
+  const [tierNamesLocal, setTierNamesLocal] = useState<Record<Tier, string>>(
+    state.tierNames,
+  );
+  const backupFileRef = useRef<HTMLInputElement | null>(null);
+  const [loadConfirmOpen, setLoadConfirmOpen] = useState(false);
+  const [pendingState, setPendingState] = useState<
+    import("../types").AppState | null
+  >(null);
 
   function updatePricing(tier: Tier, field: keyof TierPricing, raw: string) {
     const val = Number.parseInt(raw, 10);
@@ -80,6 +106,7 @@ function TournamentSection() {
   function save() {
     dispatch({ type: "SET_TOURNAMENT", tournament: { name, logoUrl } });
     dispatch({ type: "SET_TIER_PRICING", tierPricing: pricing });
+    dispatch({ type: "SET_TIER_NAMES", tierNames: tierNamesLocal });
   }
 
   return (
@@ -122,7 +149,7 @@ function TournamentSection() {
         <div className="space-y-3 pt-2">
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-bold text-foreground">
-              Auction Pricing
+              Auction Pricing &amp; Tier Names
             </h3>
             <span className="text-xs text-muted-foreground">
               — configurable per tournament
@@ -130,9 +157,12 @@ function TournamentSection() {
           </div>
           <div className="bg-secondary/50 border border-border rounded-lg p-3 space-y-3">
             {/* Header row */}
-            <div className="grid grid-cols-[100px_1fr_1fr] gap-3 items-center">
+            <div className="grid grid-cols-[140px_1fr_1fr_1fr] gap-3 items-center">
               <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                 Tier
+              </span>
+              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                Display Name
               </span>
               <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                 Base Price (₹)
@@ -144,9 +174,21 @@ function TournamentSection() {
             {TIERS.map((tier) => (
               <div
                 key={tier}
-                className="grid grid-cols-[100px_1fr_1fr] gap-3 items-center"
+                className="grid grid-cols-[140px_1fr_1fr_1fr] gap-3 items-center"
               >
-                <TierBadge tier={tier} />
+                <TierBadge tier={tier} label={tierNamesLocal[tier]} />
+                <Input
+                  data-ocid={`setup.${tier.toLowerCase()}_tier_name_input`}
+                  value={tierNamesLocal[tier]}
+                  onChange={(e) =>
+                    setTierNamesLocal((prev) => ({
+                      ...prev,
+                      [tier]: e.target.value,
+                    }))
+                  }
+                  placeholder={tier}
+                  className="bg-card border-border text-foreground h-8 text-sm"
+                />
                 <Input
                   data-ocid={`setup.${tier.toLowerCase()}_base_price_input`}
                   type="number"
@@ -181,6 +223,57 @@ function TournamentSection() {
         >
           Save Tournament
         </Button>
+        <div className="flex items-center gap-2 pt-1">
+          <Button
+            data-ocid="setup.save_backup_button"
+            variant="outline"
+            size="sm"
+            onClick={() => saveBackup(state)}
+            className="border-border text-muted-foreground hover:text-foreground flex-1"
+          >
+            <HardDrive className="h-4 w-4 mr-1.5" /> Save Backup
+          </Button>
+          <Button
+            data-ocid="setup.load_backup_button"
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              loadBackup(
+                backupFileRef,
+                (parsed) => {
+                  setPendingState(parsed);
+                  setLoadConfirmOpen(true);
+                },
+                (msg) => toast.error(msg),
+              )
+            }
+            className="border-border text-muted-foreground hover:text-foreground flex-1"
+          >
+            <FolderOpen className="h-4 w-4 mr-1.5" /> Load Backup
+          </Button>
+        </div>
+        <input
+          ref={backupFileRef}
+          type="file"
+          accept=".json"
+          className="hidden"
+        />
+        <ConfirmDialog
+          open={loadConfirmOpen}
+          onOpenChange={setLoadConfirmOpen}
+          title="Load Backup"
+          description="This will replace ALL current data including teams, players, and auction state. This cannot be undone."
+          confirmLabel="Load Backup"
+          destructive
+          onConfirm={() => {
+            if (pendingState) {
+              dispatch({ type: "LOAD_BACKUP", state: pendingState });
+              toast.success("Backup loaded successfully.");
+            }
+            setLoadConfirmOpen(false);
+            setPendingState(null);
+          }}
+        />
       </div>
     </div>
   );
@@ -394,6 +487,242 @@ function TeamsSection() {
   );
 }
 
+// ─── Bulk Import Section ───────────────────────────────────────────────────
+interface ImportResult {
+  imported: number;
+  skipped: { row: number; sheet: string; reason: string }[];
+}
+
+function BulkImportSection() {
+  const { state, dispatch } = useApp();
+  const { tierNames } = state;
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [result, setResult] = useState<ImportResult | null>(null);
+  const [showSkipped, setShowSkipped] = useState(false);
+
+  function downloadTemplate() {
+    const wb = XLSX.utils.book_new();
+    const sampleRows = [
+      ["Name", "Specialty"],
+      ["Sample Player 1", "Batsman"],
+      ["Sample Player 2", "Bowler"],
+      ["Sample Player 3", "All-Rounder"],
+    ];
+    for (const tier of TIERS) {
+      const ws = XLSX.utils.aoa_to_sheet(sampleRows);
+      XLSX.utils.book_append_sheet(wb, ws, tierNames[tier]);
+    }
+    XLSX.writeFile(wb, "player_import_template.xlsx");
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = evt.target?.result;
+        const wb = XLSX.read(data, { type: "array" });
+
+        const validPlayers: Player[] = [];
+        const skippedRows: { row: number; sheet: string; reason: string }[] =
+          [];
+
+        // Build reverse map: displayName (lowercase) -> Tier key
+        const nameToTier: Record<string, Tier> = {};
+        for (const tier of TIERS) {
+          nameToTier[tierNames[tier].toLowerCase()] = tier;
+        }
+
+        for (const sheetName of wb.SheetNames) {
+          const matchedTier = nameToTier[sheetName.toLowerCase()];
+          if (!matchedTier) {
+            skippedRows.push({
+              row: 0,
+              sheet: sheetName,
+              reason: `Sheet "${sheetName}" does not match any tier name`,
+            });
+            continue;
+          }
+
+          const ws = wb.Sheets[sheetName];
+          const rows = XLSX.utils.sheet_to_json(ws, {
+            header: 1,
+            defval: "",
+          }) as unknown as unknown[][];
+
+          // Skip header row (index 0), process from index 1
+          for (let i = 1; i < rows.length; i++) {
+            const row = rows[i];
+            const nameCell = String(row[0] ?? "").trim();
+            const specialtyCell = String(row[1] ?? "").trim();
+
+            if (!nameCell) {
+              skippedRows.push({
+                row: i + 1,
+                sheet: sheetName,
+                reason: "Missing name",
+              });
+              continue;
+            }
+
+            const specialty: Specialty = (SPECIALTIES as string[]).includes(
+              specialtyCell,
+            )
+              ? (specialtyCell as Specialty)
+              : "Batsman";
+
+            validPlayers.push({
+              id: crypto.randomUUID(),
+              name: nameCell,
+              specialty,
+              tier: matchedTier,
+              photoUrl: "",
+              status: "available",
+            });
+          }
+        }
+
+        if (validPlayers.length > 0) {
+          dispatch({ type: "BULK_ADD_PLAYERS", players: validPlayers });
+        }
+
+        setResult({ imported: validPlayers.length, skipped: skippedRows });
+        setShowSkipped(false);
+      } catch (err) {
+        console.error("Excel parse error", err);
+        setResult({
+          imported: 0,
+          skipped: [
+            {
+              row: 0,
+              sheet: "—",
+              reason:
+                "Failed to parse file. Make sure it is a valid .xlsx or .xls file.",
+            },
+          ],
+        });
+      }
+    };
+    reader.readAsArrayBuffer(file);
+
+    // Reset file input so same file can be re-imported if needed
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  const rowSkips = result?.skipped.filter((s) => s.row > 0) ?? [];
+  const sheetSkips = result?.skipped.filter((s) => s.row === 0) ?? [];
+
+  return (
+    <div className="bg-card border border-border rounded-lg p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <FileSpreadsheet className="h-4 w-4 text-accent" />
+        <h3 className="text-sm font-bold text-foreground">
+          Bulk Import via Excel
+        </h3>
+        <span className="text-xs text-muted-foreground">
+          — one sheet per tier
+        </span>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Button
+          data-ocid="bulk_import.download_template_button"
+          variant="outline"
+          size="sm"
+          onClick={downloadTemplate}
+          className="border-border text-muted-foreground hover:text-foreground gap-1.5"
+        >
+          <Download className="h-3.5 w-3.5" />
+          Download Template
+        </Button>
+
+        <Button
+          data-ocid="bulk_import.upload_button"
+          size="sm"
+          onClick={() => fileInputRef.current?.click()}
+          className="bg-primary text-primary-foreground hover:bg-primary/90 gap-1.5"
+        >
+          <FileSpreadsheet className="h-3.5 w-3.5" />
+          Import Excel
+        </Button>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".xlsx,.xls"
+          className="hidden"
+          onChange={handleFileChange}
+        />
+      </div>
+
+      {/* Result feedback */}
+      {result !== null && (
+        <div className="space-y-2">
+          {result.imported > 0 && (
+            <div
+              data-ocid="bulk_import.success_state"
+              className="flex items-center gap-2 text-sm text-emerald-400 bg-emerald-950/50 border border-emerald-800 rounded-md px-3 py-2"
+            >
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              <span>
+                <strong>{result.imported}</strong> player
+                {result.imported !== 1 ? "s" : ""} imported successfully
+              </span>
+            </div>
+          )}
+
+          {result.imported === 0 && result.skipped.length === 0 && (
+            <div className="text-sm text-muted-foreground px-1">
+              No players found in the file.
+            </div>
+          )}
+
+          {(rowSkips.length > 0 || sheetSkips.length > 0) && (
+            <div
+              data-ocid="bulk_import.error_state"
+              className="bg-amber-950/50 border border-amber-800 rounded-md px-3 py-2 space-y-1"
+            >
+              <button
+                type="button"
+                onClick={() => setShowSkipped((v) => !v)}
+                className="flex items-center gap-2 text-sm text-amber-400 w-full text-left"
+              >
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                <span>
+                  {result.skipped.length} row
+                  {result.skipped.length !== 1 ? "s" : ""} were skipped
+                </span>
+                {showSkipped ? (
+                  <ChevronUp className="h-3.5 w-3.5 ml-auto" />
+                ) : (
+                  <ChevronDown className="h-3.5 w-3.5 ml-auto" />
+                )}
+              </button>
+
+              {showSkipped && (
+                <ul className="mt-1 space-y-0.5 text-xs text-amber-300/80 pl-6 max-h-32 overflow-y-auto">
+                  {sheetSkips.map((s) => (
+                    <li key={s.sheet}>
+                      Sheet "{s.sheet}": {s.reason}
+                    </li>
+                  ))}
+                  {rowSkips.map((s) => (
+                    <li key={`${s.sheet}-${s.row}`}>
+                      Sheet "{s.sheet}" Row {s.row}: {s.reason}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Players Section ───────────────────────────────────────────────────────
 interface PlayerFormState {
   id?: string;
@@ -412,6 +741,7 @@ const DEFAULT_PLAYER_FORM: PlayerFormState = {
 
 function PlayersSection() {
   const { state, dispatch } = useApp();
+  const { tierNames } = state;
   const [dialog, setDialog] = useState<{ open: boolean; editing?: Player }>({
     open: false,
   });
@@ -492,6 +822,9 @@ function PlayersSection() {
         </Button>
       </div>
 
+      {/* Bulk Import at top of Players section */}
+      <BulkImportSection />
+
       {state.players.length === 0 ? (
         <div
           data-ocid="players.empty_state"
@@ -510,7 +843,7 @@ function PlayersSection() {
             return (
               <div key={tier}>
                 <div className="flex items-center gap-2 mb-3">
-                  <TierBadge tier={tier} />
+                  <TierBadge tier={tier} label={tierNames[tier]} />
                   <span className="text-muted-foreground text-sm">
                     {players.length} players
                   </span>
@@ -622,12 +955,12 @@ function PlayersSection() {
                     data-ocid="setup.player_tier_select"
                     className="bg-secondary border-border"
                   >
-                    <SelectValue />
+                    <SelectValue placeholder={tierNames[form.tier]} />
                   </SelectTrigger>
                   <SelectContent className="bg-popover border-border">
                     {TIERS.map((t) => (
                       <SelectItem key={t} value={t}>
-                        {t}
+                        {tierNames[t]}
                       </SelectItem>
                     ))}
                   </SelectContent>

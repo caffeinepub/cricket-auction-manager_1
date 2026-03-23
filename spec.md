@@ -1,41 +1,26 @@
 # Cricket Auction Manager
 
 ## Current State
-- Tournament branding (name, logo), team management, player management (name, tier, specialty, photo)
-- Tiered auction with hardcoded TIER_RULES: Diamond ₹2000/₹1000, Gold ₹1500/₹500, Silver ₹1000/₹500
-- Auction starts and queues all available players sorted Diamond→Gold→Silver
-- Quick Bid buttons for all teams, undo bid, mark unsold, confirm sale
-- Round 2 for unsold players
-- Results tab showing team rosters and unsold players
-- All data stored in localStorage
+Full-featured offline cricket auction manager with Setup, Auction, and Results tabs. Auction start flow exists but has bugs that prevent proper operation in certain states.
 
 ## Requested Changes (Diff)
 
 ### Add
-- `tierPricing` field in AppState: `{ Diamond: { basePrice, increment }, Gold: { basePrice, increment }, Silver: { basePrice, increment } }`
-- `SET_TIER_PRICING` reducer action
-- Pricing configuration UI in Setup > Tournament tab: 3 rows (Diamond/Gold/Silver), each with Base Price input and Bid Increment input
-- Save Pricing button in tournament section
-- Auction phase indicator during bidding showing which tier phase is active (Phase 1: Diamond, Phase 2: Gold, Phase 3: Silver)
-- "End Auction" button in the round-complete screen — blocked with warning if any team has fewer than 11 players, otherwise navigates to Results
-- Team squad view in ResultsTab: each team card shows the team logo as a faded background image behind the player roster
+- "Reset Players & Restart" button on Auction tab when all players are sold/unsold (stuck state)
+- Clear error messages explaining exactly what's missing before auction can start
 
 ### Modify
-- Remove hardcoded TIER_RULES constants from types.ts; replace all references to use `state.tierPricing` (with fallback defaults)
-- `getNextBid` and `PLACE_BID` logic to read from `state.tierPricing` rather than static TIER_RULES
-- AuctionTab start screen to show per-tier base prices from `state.tierPricing`
-- START_AUCTION action already sorts Diamond→Gold→Silver (correct, keep)
-- Round-complete screen to enforce minimum 11 players per team before allowing "End Auction / View Results"
+- Fix `CONFIRM_SALE` logic: allow confirming sale when a bidder exists (remove overly strict `currentBid === 0` guard that can block valid sales at base price with 0-value configs)
+- Fix Auction tab stuck state: when `auction.started = true` but `activePlayerId = null` and there are still available players (e.g. after partial reset), auto-advance or show a Resume button
+- Fix player queue stuck state: if all players are sold/unsold but auction shows as started with no active player, offer to go to results or start secondary round
+- Improve Start Auction pre-flight check: show specifically what's missing (no teams, no available players, players all sold already)
+- Add "Reset Auction" button directly on Auction tab (not just Results) so users aren't stuck
 
 ### Remove
-- Hardcoded `TIER_RULES` object (or keep as DEFAULT_TIER_RULES fallback only if tierPricing not set)
+- Nothing
 
 ## Implementation Plan
-1. Update `types.ts`: add `TierPricing` type, add `tierPricing` to `AppState`, export `DEFAULT_TIER_RULES` as fallback
-2. Update `AppContext.tsx`: initialize `tierPricing` in `INITIAL_STATE` with defaults, add `SET_TIER_PRICING` case, update `PLACE_BID` and `START_AUCTION` to read from `state.tierPricing`
-3. Update `SetupTab.tsx`: add pricing config section in Tournament tab with inputs for base price and increment per tier
-4. Update `AuctionTab.tsx`:
-   - In the not-started screen, show per-tier prices from `state.tierPricing`
-   - In active bidding, show phase badge (Phase 1 Diamond / Phase 2 Gold / Phase 3 Silver) based on `activePlayer.tier`
-   - In round-complete screen, add minimum 11 check: count teams with fewer than 11 players, show warning, block "View Results" if enforcement needed
-5. Update `ResultsTab.tsx`: team squad cards show team logo as faded background image
+1. In AppContext reducer, fix edge cases in START_AUCTION and CONFIRM_SALE
+2. In AuctionTab, add better pre-flight error messages and a reset/restart option when stuck
+3. Add a Resume button if auction started but activePlayerId is null but available players exist
+4. Ensure the round-complete screen correctly shows secondary round option only when unsold players exist

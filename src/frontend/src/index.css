@@ -1,0 +1,87 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: "Bricolage Grotesque";
+  src: url("/assets/fonts/BricolageGrotesque.woff2") format("woff2");
+  font-weight: 200 800;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "General Sans";
+  src: url("/assets/fonts/GeneralSans.woff2") format("woff2");
+  font-weight: 200 700;
+  font-display: swap;
+}
+
+@layer base {
+  :root {
+    --radius: 0.375rem;
+    /* Dark cricket arena — deep field green */
+    --background: 0.09 0.025 155;
+    --foreground: 0.93 0.02 155;
+    --card: 0.13 0.022 155;
+    --card-foreground: 0.93 0.02 155;
+    --popover: 0.17 0.02 155;
+    --popover-foreground: 0.93 0.02 155;
+    --primary: 0.53 0.18 155;
+    --primary-foreground: 0.98 0 0;
+    --secondary: 0.19 0.028 155;
+    --secondary-foreground: 0.88 0.015 155;
+    --muted: 0.2 0.018 155;
+    --muted-foreground: 0.58 0.025 155;
+    --accent: 0.72 0.18 82;
+    --accent-foreground: 0.12 0.01 82;
+    --destructive: 0.6 0.22 20;
+    --destructive-foreground: 0.98 0 0;
+    --border: 0.24 0.025 155;
+    --input: 0.18 0.022 155;
+    --ring: 0.53 0.18 155;
+    --chart-1: 0.53 0.18 155;
+    --chart-2: 0.72 0.18 82;
+    --chart-3: 0.62 0.2 265;
+    --chart-4: 0.65 0.22 20;
+    --chart-5: 0.68 0.04 255;
+    --sidebar: 0.11 0.022 155;
+    --sidebar-foreground: 0.93 0.02 155;
+    --sidebar-primary: 0.53 0.18 155;
+    --sidebar-primary-foreground: 0.98 0 0;
+    --sidebar-accent: 0.72 0.18 82;
+    --sidebar-accent-foreground: 0.12 0.01 82;
+    --sidebar-border: 0.24 0.025 155;
+    --sidebar-ring: 0.53 0.18 155;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: "General Sans", system-ui, sans-serif;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: "Bricolage Grotesque", system-ui, sans-serif;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  .print-area {
+    color: black !important;
+  }
+}

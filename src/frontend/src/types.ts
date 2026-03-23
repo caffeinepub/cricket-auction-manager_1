@@ -52,6 +52,12 @@ export const DEFAULT_TIER_RULES: Record<Tier, TierPricing> = {
   Silver: { basePrice: 1500, increment: 500 },
 };
 
+export const DEFAULT_TIER_NAMES: Record<Tier, string> = {
+  Diamond: "Diamond",
+  Gold: "Gold",
+  Silver: "Silver",
+};
+
 // Keep for backward compat
 export const TIER_RULES = DEFAULT_TIER_RULES;
 
@@ -61,17 +67,20 @@ export interface AppState {
   players: Player[];
   auction: AuctionState;
   tierPricing: Record<Tier, TierPricing>;
+  tierNames: Record<Tier, string>;
 }
 
 export type Action =
   | { type: "SET_TOURNAMENT"; tournament: Tournament }
   | { type: "SET_TIER_PRICING"; tierPricing: Record<Tier, TierPricing> }
+  | { type: "SET_TIER_NAMES"; tierNames: Record<Tier, string> }
   | { type: "ADD_TEAM"; team: Team }
   | { type: "UPDATE_TEAM"; team: Team }
   | { type: "DELETE_TEAM"; teamId: string }
   | { type: "ADD_PLAYER"; player: Player }
   | { type: "UPDATE_PLAYER"; player: Player }
   | { type: "DELETE_PLAYER"; playerId: string }
+  | { type: "BULK_ADD_PLAYERS"; players: Player[] }
   | { type: "START_AUCTION" }
   | { type: "PLACE_BID"; teamId: string }
   | { type: "UNDO_BID" }
@@ -79,7 +88,8 @@ export type Action =
   | { type: "MARK_UNSOLD" }
   | { type: "START_SECONDARY_ROUND" }
   | { type: "RESET_AUCTION" }
-  | { type: "NEW_TOURNAMENT" };
+  | { type: "NEW_TOURNAMENT" }
+  | { type: "LOAD_BACKUP"; state: AppState };
 
 export const SPECIALTIES: Specialty[] = [
   "Batsman",

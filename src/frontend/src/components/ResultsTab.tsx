@@ -4,28 +4,43 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Printer, RotateCcw, Trophy, UserRound } from "lucide-react";
-import { useState } from "react";
+import {
+  FolderOpen,
+  HardDrive,
+  Plus,
+  Printer,
+  RotateCcw,
+  Trophy,
+  UserRound,
+} from "lucide-react";
+import { useRef, useState } from "react";
+import { toast } from "sonner";
+import { loadBackup, saveBackup } from "../hooks/useBackup";
 import { useApp } from "../store/AppContext";
 import { formatCurrency, getRemainingBudget, getTierClasses } from "../types";
 import type { Tier } from "../types";
 import { ConfirmDialog } from "./ConfirmDialog";
 
-function TierBadge({ tier }: { tier: Tier }) {
+function TierBadge({ tier, label }: { tier: Tier; label: string }) {
   return (
     <span
       className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${getTierClasses(tier)}`}
     >
-      {tier}
+      {label}
     </span>
   );
 }
 
 export function ResultsTab() {
   const { state, dispatch } = useApp();
-  const { teams, players, tournament } = state;
+  const { teams, players, tournament, tierNames } = state;
   const [resetOpen, setResetOpen] = useState(false);
   const [newTournamentOpen, setNewTournamentOpen] = useState(false);
+  const [loadConfirmOpen, setLoadConfirmOpen] = useState(false);
+  const [pendingState, setPendingState] = useState<
+    import("../types").AppState | null
+  >(null);
+  const backupFileRef = useRef<HTMLInputElement | null>(null);
 
   const soldPlayers = players.filter((p) => p.status === "sold");
   const unsoldPlayers = players.filter((p) => p.status === "unsold");
@@ -67,8 +82,41 @@ export function ResultsTab() {
           >
             <Plus className="h-4 w-4 mr-1.5" /> New Tournament
           </Button>
+          <Button
+            data-ocid="results.save_backup_button"
+            variant="outline"
+            size="sm"
+            onClick={() => saveBackup(state)}
+            className="border-border text-muted-foreground hover:text-foreground"
+          >
+            <HardDrive className="h-4 w-4 mr-1.5" /> Save Backup
+          </Button>
+          <Button
+            data-ocid="results.load_backup_button"
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              loadBackup(
+                backupFileRef,
+                (parsed) => {
+                  setPendingState(parsed);
+                  setLoadConfirmOpen(true);
+                },
+                (msg) => toast.error(msg),
+              )
+            }
+            className="border-border text-muted-foreground hover:text-foreground"
+          >
+            <FolderOpen className="h-4 w-4 mr-1.5" /> Load Backup
+          </Button>
         </div>
       </div>
+      <input
+        ref={backupFileRef}
+        type="file"
+        accept=".json"
+        className="hidden"
+      />
 
       {/* Tournament header */}
       {tournament.name && (
@@ -178,7 +226,10 @@ export function ResultsTab() {
                               <span className="text-xs font-medium flex-1 truncate">
                                 {p.name}
                               </span>
-                              <TierBadge tier={p.tier} />
+                              <TierBadge
+                                tier={p.tier}
+                                label={tierNames[p.tier]}
+                              />
                               <span className="text-xs text-accent font-bold">
                                 {formatCurrency(p.soldPrice ?? 0)}
                               </span>
@@ -213,7 +264,7 @@ export function ResultsTab() {
                   </p>
                   {teamPlayers.map((p) => (
                     <p key={p.id} className="text-sm">
-                      {p.name} ({p.tier}, {p.specialty}) —{" "}
+                      {p.name} ({tierNames[p.tier]}, {p.specialty}) —{" "}
                       {formatCurrency(p.soldPrice ?? 0)}
                     </p>
                   ))}
@@ -256,7 +307,7 @@ export function ResultsTab() {
                   <p className="text-sm font-semibold truncate">{p.name}</p>
                   <p className="text-xs text-muted-foreground">{p.specialty}</p>
                 </div>
-                <TierBadge tier={p.tier} />
+                <TierBadge tier={p.tier} label={tierNames[p.tier]} />
               </div>
             ))}
           </div>
@@ -299,6 +350,22 @@ export function ResultsTab() {
           setNewTournamentOpen(false);
         }}
         destructive
+      />
+      <ConfirmDialog
+        open={loadConfirmOpen}
+        onOpenChange={setLoadConfirmOpen}
+        title="Load Backup"
+        description="This will replace ALL current data including teams, players, and auction state. This cannot be undone."
+        confirmLabel="Load Backup"
+        destructive
+        onConfirm={() => {
+          if (pendingState) {
+            dispatch({ type: "LOAD_BACKUP", state: pendingState });
+            toast.success("Backup loaded successfully.");
+          }
+          setLoadConfirmOpen(false);
+          setPendingState(null);
+        }}
       />
     </div>
   );

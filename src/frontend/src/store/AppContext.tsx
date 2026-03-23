@@ -6,7 +6,7 @@ import {
   useReducer,
 } from "react";
 import type { Action, AppState, Tier } from "../types";
-import { DEFAULT_TIER_RULES } from "../types";
+import { DEFAULT_TIER_NAMES, DEFAULT_TIER_RULES } from "../types";
 
 const STORAGE_KEY = "cricket_auction_data";
 
@@ -26,6 +26,7 @@ const INITIAL_STATE: AppState = {
   players: [],
   auction: INITIAL_AUCTION,
   tierPricing: DEFAULT_TIER_RULES,
+  tierNames: DEFAULT_TIER_NAMES,
 };
 
 function advanceToNextPlayer(state: AppState): AppState {
@@ -66,6 +67,9 @@ function reducer(state: AppState, action: Action): AppState {
     case "SET_TIER_PRICING":
       return { ...state, tierPricing: action.tierPricing };
 
+    case "SET_TIER_NAMES":
+      return { ...state, tierNames: action.tierNames };
+
     case "ADD_TEAM":
       return { ...state, teams: [...state.teams, action.team] };
 
@@ -100,6 +104,11 @@ function reducer(state: AppState, action: Action): AppState {
         players: state.players.filter((p) => p.id !== action.playerId),
       };
 
+    case "BULK_ADD_PLAYERS":
+      return { ...state, players: [...state.players, ...action.players] };
+
+    // Fix: Always rebuild queue from available players regardless of started state.
+    // This allows resuming if auction got stuck (started=true, activePlayerId=null).
     case "START_AUCTION": {
       const queue = state.players
         .filter((p) => p.status === "available")
@@ -110,7 +119,7 @@ function reducer(state: AppState, action: Action): AppState {
       return {
         ...state,
         auction: {
-          round: 1,
+          round: state.auction.started ? state.auction.round : 1,
           started: true,
           activePlayerId: first,
           currentBid: 0,
@@ -163,12 +172,8 @@ function reducer(state: AppState, action: Action): AppState {
 
     case "CONFIRM_SALE": {
       const { auction, players, teams } = state;
-      if (
-        !auction.activePlayerId ||
-        !auction.currentBidderId ||
-        auction.currentBid === 0
-      )
-        return state;
+      // Fix: removed auction.currentBid === 0 check — base price may legitimately be 0
+      if (!auction.activePlayerId || !auction.currentBidderId) return state;
       const bidderId = auction.currentBidderId;
       const bid = auction.currentBid;
       const updatedPlayers = players.map((p) =>
@@ -252,6 +257,9 @@ function reducer(state: AppState, action: Action): AppState {
     case "NEW_TOURNAMENT":
       return INITIAL_STATE;
 
+    case "LOAD_BACKUP":
+      return action.state;
+
     default:
       return state;
   }
@@ -273,6 +281,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // Migrate old data without tierPricing
         if (!parsed.tierPricing) {
           parsed.tierPricing = DEFAULT_TIER_RULES;
+        }
+        // Migrate old data without tierNames
+        if (!parsed.tierNames) {
+          parsed.tierNames = DEFAULT_TIER_NAMES;
         }
         return parsed;
       }

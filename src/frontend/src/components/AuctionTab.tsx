@@ -1,5 +1,4 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -24,13 +23,14 @@ import {
   getRemainingBudget,
   getTierClasses,
 } from "../types";
+import { ConfirmDialog } from "./ConfirmDialog";
 
-function TierBadge({ tier }: { tier: Tier }) {
+function TierBadge({ tier, label }: { tier: Tier; label: string }) {
   return (
     <span
       className={`text-xs font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${getTierClasses(tier)}`}
     >
-      {tier}
+      {label}
     </span>
   );
 }
@@ -49,13 +49,8 @@ function RoundBadge({ round }: { round: 1 | 2 }) {
   );
 }
 
-function PhaseBadge({ tier }: { tier: Tier }) {
-  const phaseLabel =
-    tier === "Diamond"
-      ? "Phase 1: Diamond"
-      : tier === "Gold"
-        ? "Phase 2: Gold"
-        : "Phase 3: Silver";
+function PhaseBadge({ tier, label }: { tier: Tier; label: string }) {
+  const phaseNum = tier === "Diamond" ? 1 : tier === "Gold" ? 2 : 3;
   const cls =
     tier === "Diamond"
       ? "bg-blue-950 text-blue-300 border border-blue-700"
@@ -66,15 +61,16 @@ function PhaseBadge({ tier }: { tier: Tier }) {
     <span
       className={`text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider ${cls}`}
     >
-      {phaseLabel}
+      Phase {phaseNum}: {label}
     </span>
   );
 }
 
 export function AuctionTab({ onGoToResults }: { onGoToResults: () => void }) {
   const { state, dispatch } = useApp();
-  const { auction, teams, players, tierPricing } = state;
+  const { auction, teams, players, tierPricing, tierNames } = state;
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
 
   const activePlayer = auction.activePlayerId
     ? players.find((p) => p.id === auction.activePlayerId)
@@ -82,8 +78,64 @@ export function AuctionTab({ onGoToResults }: { onGoToResults: () => void }) {
   const availablePlayers = players.filter((p) => p.status === "available");
   const unsoldPlayers = players.filter((p) => p.status === "unsold");
 
-  // Not started
+  const handleReset = () => {
+    dispatch({ type: "RESET_AUCTION" });
+    setResetOpen(false);
+  };
+
+  // ── Stuck state: auction started but no active player and available players exist ──
+  if (
+    auction.started &&
+    !auction.activePlayerId &&
+    availablePlayers.length > 0
+  ) {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <div className="bg-card border border-border rounded-xl p-8 text-center space-y-5">
+          <div className="flex justify-center">
+            <Zap className="h-16 w-16 text-accent" />
+          </div>
+          <h2 className="text-2xl font-bold">Auction Paused</h2>
+          <p className="text-muted-foreground">
+            Auction paused — {availablePlayers.length} player
+            {availablePlayers.length !== 1 ? "s" : ""} remaining.
+          </p>
+          <Button
+            data-ocid="auction.resume_button"
+            size="lg"
+            onClick={() => dispatch({ type: "START_AUCTION" })}
+            className="bg-primary text-primary-foreground hover:bg-primary/90 text-base px-8 h-12"
+          >
+            <Zap className="h-5 w-5 mr-2" /> Resume Auction
+          </Button>
+          <Button
+            data-ocid="auction.reset_button"
+            size="lg"
+            variant="outline"
+            onClick={() => setResetOpen(true)}
+            className="border-destructive text-destructive hover:bg-destructive/10 text-base px-8"
+          >
+            <RotateCcw className="h-5 w-5 mr-2" /> Reset Auction
+          </Button>
+          <ConfirmDialog
+            open={resetOpen}
+            onOpenChange={setResetOpen}
+            title="Reset Auction"
+            description="This will reset all player statuses and team spending. Are you sure?"
+            confirmLabel="Reset"
+            onConfirm={handleReset}
+            destructive
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // ── Not started ──
   if (!auction.started) {
+    const allAuctioned =
+      teams.length > 0 && players.length > 0 && availablePlayers.length === 0;
+
     return (
       <div className="max-w-4xl mx-auto space-y-6">
         <div className="bg-card border border-border rounded-xl p-6">
@@ -92,7 +144,26 @@ export function AuctionTab({ onGoToResults }: { onGoToResults: () => void }) {
             <h2 className="text-xl font-bold">Start Auction</h2>
             <RoundBadge round={1} />
           </div>
-          {teams.length === 0 || availablePlayers.length === 0 ? (
+
+          {allAuctioned ? (
+            <div className="text-center py-10 space-y-4">
+              <Trophy className="h-12 w-12 text-accent mx-auto" />
+              <p className="text-foreground font-semibold">
+                All players have already been auctioned.
+              </p>
+              <p className="text-muted-foreground text-sm">
+                Reset the auction to start again.
+              </p>
+              <Button
+                data-ocid="auction.reset_button"
+                variant="outline"
+                onClick={() => setResetOpen(true)}
+                className="border-destructive text-destructive hover:bg-destructive/10"
+              >
+                <RotateCcw className="h-4 w-4 mr-2" /> Reset Auction
+              </Button>
+            </div>
+          ) : teams.length === 0 || availablePlayers.length === 0 ? (
             <div className="text-center py-10">
               <p className="text-muted-foreground mb-2">
                 Please add teams and players in Setup before starting the
@@ -113,7 +184,8 @@ export function AuctionTab({ onGoToResults }: { onGoToResults: () => void }) {
             <>
               <p className="text-muted-foreground mb-5">
                 {availablePlayers.length} players ready — {teams.length} teams —
-                sorted Diamond → Gold → Silver
+                sorted {tierNames.Diamond} → {tierNames.Gold} →{" "}
+                {tierNames.Silver}
               </p>
 
               {/* Pricing Summary */}
@@ -127,7 +199,7 @@ export function AuctionTab({ onGoToResults }: { onGoToResults: () => void }) {
                       key={tier}
                       className="flex flex-col gap-1 bg-card border border-border rounded-lg p-2.5"
                     >
-                      <TierBadge tier={tier} />
+                      <TierBadge tier={tier} label={tierNames[tier]} />
                       <p className="text-xs text-muted-foreground mt-1">
                         Base:{" "}
                         <span className="text-foreground font-semibold">
@@ -179,7 +251,7 @@ export function AuctionTab({ onGoToResults }: { onGoToResults: () => void }) {
                         <span className="text-sm font-medium flex-1 truncate">
                           {p.name}
                         </span>
-                        <TierBadge tier={p.tier} />
+                        <TierBadge tier={p.tier} label={tierNames[p.tier]} />
                       </div>
                     ))}
                   {availablePlayers.length > 8 && (
@@ -192,21 +264,24 @@ export function AuctionTab({ onGoToResults }: { onGoToResults: () => void }) {
             </>
           )}
         </div>
+
+        <ConfirmDialog
+          open={resetOpen}
+          onOpenChange={setResetOpen}
+          title="Reset Auction"
+          description="This will reset all player statuses and team spending. Are you sure?"
+          confirmLabel="Reset"
+          onConfirm={handleReset}
+          destructive
+        />
       </div>
     );
   }
 
-  // Round complete
+  // ── Round complete ──
   if (auction.started && !auction.activePlayerId) {
     const soldCount = players.filter((p) => p.status === "sold").length;
     const unsoldCount = unsoldPlayers.length;
-    const teamsUnder11 = teams.filter((t) => {
-      const bought = players.filter(
-        (p) => p.status === "sold" && p.soldToTeamId === t.id,
-      ).length;
-      return bought < 11;
-    });
-    const canViewResults = teamsUnder11.length === 0;
 
     return (
       <div className="max-w-2xl mx-auto">
@@ -220,39 +295,6 @@ export function AuctionTab({ onGoToResults }: { onGoToResults: () => void }) {
           <p className="text-muted-foreground">
             {soldCount} players sold · {unsoldCount} players unsold
           </p>
-
-          {/* Min 11 warning */}
-          {!canViewResults && (
-            <div
-              data-ocid="auction.min_players_warning"
-              className="bg-amber-950/60 border border-amber-700 rounded-lg px-4 py-3 text-left"
-            >
-              <p className="text-amber-300 text-sm font-semibold">
-                ⚠ Minimum 11 players not met
-              </p>
-              <p className="text-amber-400/70 text-xs mt-1">
-                {teamsUnder11.length} team
-                {teamsUnder11.length !== 1 ? "s have" : " has"} fewer than 11
-                players. Each team requires a minimum of 11 players before the
-                auction can be ended.
-              </p>
-              <div className="mt-2 flex flex-wrap gap-1">
-                {teamsUnder11.map((t) => {
-                  const count = players.filter(
-                    (p) => p.status === "sold" && p.soldToTeamId === t.id,
-                  ).length;
-                  return (
-                    <span
-                      key={t.id}
-                      className="text-[10px] bg-amber-900/50 text-amber-300 border border-amber-700/50 rounded-full px-2 py-0.5"
-                    >
-                      {t.name}: {count}/11
-                    </span>
-                  );
-                })}
-              </div>
-            </div>
-          )}
 
           {auction.round === 1 && unsoldCount > 0 && (
             <Button
@@ -270,23 +312,35 @@ export function AuctionTab({ onGoToResults }: { onGoToResults: () => void }) {
             size="lg"
             variant="outline"
             onClick={onGoToResults}
-            disabled={!canViewResults}
-            className="border-border text-foreground hover:bg-secondary text-base px-8 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="border-border text-foreground hover:bg-secondary text-base px-8"
           >
             <ChevronRight className="h-5 w-5 mr-2" /> View Results
           </Button>
-          {!canViewResults && (
-            <p className="text-xs text-muted-foreground">
-              Complete the secondary round or ensure all teams have 11+ players
-              to view results.
-            </p>
-          )}
+          <Button
+            data-ocid="auction.reset_button"
+            size="lg"
+            variant="outline"
+            onClick={() => setResetOpen(true)}
+            className="border-destructive text-destructive hover:bg-destructive/10 text-base px-8"
+          >
+            <RotateCcw className="h-5 w-5 mr-2" /> Reset Auction
+          </Button>
         </div>
+
+        <ConfirmDialog
+          open={resetOpen}
+          onOpenChange={setResetOpen}
+          title="Reset Auction"
+          description="This will reset all player statuses and team spending. Are you sure?"
+          confirmLabel="Reset"
+          onConfirm={handleReset}
+          destructive
+        />
       </div>
     );
   }
 
-  // Active bidding — full-screen hero layout
+  // ── Active bidding — full-screen hero layout ──
   if (!activePlayer) return null;
   const tierRules = tierPricing[activePlayer.tier];
   const nextBidAmount = getNextBid(
@@ -334,7 +388,10 @@ export function AuctionTab({ onGoToResults }: { onGoToResults: () => void }) {
           <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 pt-3 z-10 gap-2">
             <div className="flex items-center gap-2 flex-wrap">
               <RoundBadge round={auction.round} />
-              <PhaseBadge tier={activePlayer.tier} />
+              <PhaseBadge
+                tier={activePlayer.tier}
+                label={tierNames[activePlayer.tier]}
+              />
             </div>
             <span className="text-xs font-semibold bg-black/50 text-white/80 px-2.5 py-1 rounded-full backdrop-blur-sm shrink-0">
               {remainingInQueue} in queue
@@ -352,7 +409,10 @@ export function AuctionTab({ onGoToResults }: { onGoToResults: () => void }) {
             <div className="flex items-end justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2 mb-2">
-                  <TierBadge tier={activePlayer.tier} />
+                  <TierBadge
+                    tier={activePlayer.tier}
+                    label={tierNames[activePlayer.tier]}
+                  />
                   <span className="text-white/70 text-sm font-medium">
                     {activePlayer.specialty}
                   </span>
@@ -452,10 +512,11 @@ export function AuctionTab({ onGoToResults }: { onGoToResults: () => void }) {
             >
               <XCircle className="h-3 w-3 mr-1" /> Unsold
             </Button>
+            {/* Fix: removed auction.currentBid === 0 check to allow confirming when basePrice is 0 */}
             <Button
               data-ocid="auction.confirm_sale_button"
               size="sm"
-              disabled={!auction.currentBidderId || auction.currentBid === 0}
+              disabled={!auction.currentBidderId}
               onClick={() => dispatch({ type: "CONFIRM_SALE" })}
               className="h-7 px-3 text-[11px] bg-primary text-primary-foreground hover:bg-primary/90"
             >
